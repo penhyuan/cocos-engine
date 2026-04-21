@@ -64,6 +64,8 @@ SkeletonCacheAnimation::SkeletonCacheAnimation(const std::string &uuid, bool isS
 }
 
 SkeletonCacheAnimation::~SkeletonCacheAnimation() {
+    stopSchedule();
+
     if (_sharedBufferOffset) {
         delete _sharedBufferOffset;
         _sharedBufferOffset = nullptr;
@@ -85,7 +87,7 @@ SkeletonCacheAnimation::~SkeletonCacheAnimation() {
     for (auto &item : _materialCaches) {
         CC_SAFE_DELETE(item.second);
     }
-    stopSchedule();
+    _entity = nullptr;
 }
 
 void SkeletonCacheAnimation::update(float dt) {
@@ -155,10 +157,15 @@ void SkeletonCacheAnimation::update(float dt) {
 }
 
 void SkeletonCacheAnimation::render(float /*dt*/) {
-    if (!_animationData) return;
+    if (!_animationData || !_entity || !_sharedBufferOffset) return;
     SkeletonCache::FrameData *frameData = _animationData->getFrameData(_curFrameIndex);
     if (!frameData) return;
     auto *entity = _entity;
+    auto *node = entity->getNode();
+    if (!node) {
+        entity->clearDynamicRenderDrawInfos();
+        return;
+    }
     entity->clearDynamicRenderDrawInfos();
 
     const auto &segments = frameData->getSegments();
@@ -196,7 +203,7 @@ void SkeletonCacheAnimation::render(float /*dt*/) {
     int vs = _useTint ? vs2 : vs1;
     int vbs = _useTint ? vbs2 : vbs1;
 
-    auto &nodeWorldMat = entity->getNode()->getWorldMatrix();
+    auto &nodeWorldMat = node->getWorldMatrix();
 
     int colorOffset = 0;
     SkeletonCache::ColorData *nowColor = colors[colorOffset++];
@@ -238,7 +245,7 @@ void SkeletonCacheAnimation::render(float /*dt*/) {
     }
 
     auto handleColor = [&](SkeletonCache::ColorData *colorData) {
-        tempA = colorData->finalColor.a * _entity->getOpacity();
+        tempA = colorData->finalColor.a * entity->getOpacity();
         multiplier = _premultipliedAlpha ? tempA / 255 : 1;
         tempR = _nodeColor.r * multiplier;
         tempG = _nodeColor.g * multiplier;

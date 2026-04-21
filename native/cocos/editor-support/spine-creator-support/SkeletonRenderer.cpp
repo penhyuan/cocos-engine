@@ -147,6 +147,7 @@ SkeletonRenderer::SkeletonRenderer(const std::string &skeletonDataFile, const st
 }
 
 SkeletonRenderer::~SkeletonRenderer() {
+    stopSchedule();
 #if CC_USE_SPINE_3_8
     CC_SAFE_RELEASE(_effectDelegate);
 #endif
@@ -174,7 +175,7 @@ SkeletonRenderer::~SkeletonRenderer() {
         CC_SAFE_DELETE(item.second);
     }
 
-    stopSchedule();
+    _entity = nullptr;
 }
 
 void SkeletonRenderer::initWithUUID(const std::string &uuid) {
@@ -269,8 +270,13 @@ void SkeletonRenderer::initWithBinaryFile(const std::string &skeletonDataFile, c
 }
 
 void SkeletonRenderer::render(float /*deltaTime*/) {
-    if (!_skeleton) return;
+    if (!_skeleton || !_entity || !_sharedBufferOffset) return;
     auto *entity = _entity;
+    auto *node = entity->getNode();
+    if (!node) {
+        entity->clearDynamicRenderDrawInfos();
+        return;
+    }
     entity->clearDynamicRenderDrawInfos();
     _sharedBufferOffset->reset();
     _sharedBufferOffset->clear();
@@ -288,7 +294,7 @@ void SkeletonRenderer::render(float /*deltaTime*/) {
     if (_skeleton->getColor().a == 0) {
         return;
     }
-    auto &nodeWorldMat = entity->getNode()->getWorldMatrix();
+    auto &nodeWorldMat = node->getWorldMatrix();
     // color range is [0.0, 1.0]
     cc::middleware::Color4F color;
     cc::middleware::Color4F darkColor;

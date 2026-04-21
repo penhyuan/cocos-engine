@@ -32,6 +32,30 @@ MIDDLEWARE_BEGIN
 
 MiddlewareManager *MiddlewareManager::instance = nullptr;
 
+namespace {
+
+bool isPendingRemove(const ccstd::unordered_map<IMiddleware *, bool> &operateCacheMap, IMiddleware *editor) {
+    auto iter = operateCacheMap.find(editor);
+    return iter != operateCacheMap.end() && !iter->second;
+}
+
+void removePendingTimers(ccstd::vector<IMiddleware *> &updateList, ccstd::unordered_map<IMiddleware *, bool> &operateCacheMap) {
+    for (auto iter = operateCacheMap.begin(); iter != operateCacheMap.end();) {
+        if (iter->second) {
+            ++iter;
+            continue;
+        }
+
+        auto item = std::find(updateList.begin(), updateList.end(), iter->first);
+        if (item != updateList.end()) {
+            updateList.erase(item);
+        }
+        iter = operateCacheMap.erase(iter);
+    }
+}
+
+} // namespace
+
 MiddlewareManager::MiddlewareManager() : _renderInfo(se::Object::TypedArrayType::UINT32),
                                          _attachInfo(se::Object::TypedArrayType::FLOAT32) {
 }
@@ -78,18 +102,18 @@ void MiddlewareManager::update(float dt) {
 
     for (size_t i = 0, len = _updateList.size(); i < len; ++i) {
         auto *editor = _updateList[i];
+        if (!editor || isPendingRemove(_operateCacheMap, editor)) {
+            continue;
+        }
         editor->update(dt);
     }
 
-    for (auto &iter: _operateCacheMap) {
-        auto it = std::find(_updateList.begin(), _updateList.end(), iter.first);
-        if (!iter.second && it != _updateList.end()) {
-             _updateList.erase(it);
-        }
-    }
+    removePendingTimers(_updateList, _operateCacheMap);
 }
 
 void MiddlewareManager::render(float dt) {
+    removePendingTimers(_updateList, _operateCacheMap);
+
     for (auto it : _mbMap) {
         auto *buffer = it.second;
         if (buffer) {
@@ -100,8 +124,13 @@ void MiddlewareManager::render(float dt) {
 
     for (size_t i = 0, len = _updateList.size(); i < len; ++i) {
         auto *editor = _updateList[i];
+        if (!editor || isPendingRemove(_operateCacheMap, editor)) {
+            continue;
+        }
         editor->render(dt);
     }
+
+    removePendingTimers(_updateList, _operateCacheMap);
 
     for (auto it : _mbMap) {
         auto *buffer = it.second;
